@@ -1,0 +1,41 @@
+Changelog
+---------
+
+27/07/18
+
+- COUTdone removed (not necessary to wait for character to be output
+  before switching I/O page).
+
+- Code optimizations, e.g.
+    ex de,hl  instead of  ld l,e + ld h,d
+    or a      instead of  cp 0
+    jr xxx    instead of  jp xxx (where applicable)
+    djnz ...  where applicable
+
+- Better HEXOUT routine.
+
+- HEX file checksum check done by 'add b' instead of 'neg a + cp b'
+
+- CIN calls COUT to echo the character, instead of sending it directly to
+  the UART TX port (TX might be busy, although unlikely).
+
+
+03/04/20
+
+- Boot RSX280 option.
+
+- G command calls (instead of jumping to) the user program.
+
+
+04/04/20
+
+- Prevent endless loop of D command when end adress is FFFF.
+
+- Allow ending E command with a dot as well as with an 'X'.
+
+
+12/04/20
+
+- Boot UZI280 option (requires installing a suitable bootloader on block 0
+  of the UZI partition).
+

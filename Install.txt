@@ -1,0 +1,49 @@
+ZZmon installation
+------------------
+
+- Remove the boot jumper on the Z280RC board.
+
+- Connect the Z280RC to the PC via the USB adapter and power it with 5V
+  supply as usual.
+
+- Start your favorite terminal program and connect to the Z280RC serial
+  adapter (under Linux it will be /dev/ttyUSB0 or so).
+
+- Press the reset button on the Z280RC board to ensure the Z280 CPU is
+  ready to accept the serial boot program. Nothing will appear on the
+  screen.
+
+- From your favorite terminal program, send the loadngo.run file using
+  binary mode:
+
+    TinyLoad 1.1
+    G xxxx when done
+    ........................................................................
+    ........................................................................
+    ........................................................X
+
+    TinyZZ Monitor v2.0 12-Apr-2020
+
+
+    >
+
+- Use the C command to copy the boot loader and ZZmon to the Compact Flash.
+
+- Restore the boot jumper and reset the board.
+
+
+Notes:
+
+- Sometimes the CF hangs when removing/replacing the boot jumper and either
+  ZZmon cannot be saved with the C command or the board will not boot again
+  even after pressing the reset button. In that case recycling power restores
+  operation.
+
+- Sometimes sending the loadngo.run file is too fast for the z280rc to handle;
+  in that case you can try adding a small delay after each byte sent (if your
+  terminal program supports such option), or you can do the transfer in two
+  steps:
+
+   1) send the loadngo.bin file.
+   2) at the 'TinyLoad' prompt, send the zzmon.hex file.
+
