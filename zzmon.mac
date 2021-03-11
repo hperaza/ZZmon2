@@ -1,3 +1,6 @@
+; 3/11/21 v2.1 by H. Peraza
+;  - allow 16-bit track number in R command.
+;
 ; 4/3/20 v2.0 by H. Peraza
 ;  - boot RSX280 and UZI280
 ;  - G command calls (instead of jumping to) the user program, so a 'ret'
@@ -764,8 +767,8 @@ READCF:
 	call	STROUT
 	ld	hl,track$	; enter track in hex value
 	call	STROUT
-	call	GETHEX		; get a byte of hex value as track
-	push	af		; save track value in stack
+	call	ADRIN		; get a word of hex value as track
+	push	de		; save track value in stack
 	ld	hl,sector$	; enter sector in hex value
 	call	STROUT
 	call	GETHEX		; get a byte of hex value as sector
@@ -780,14 +783,13 @@ READCF:
 	out	(CF2427),a
 	ld	a,1		; read 1 sector
 	out	(CFsectcnt),a	; write to sector count with 1
-	ld	a,0		; read first sector
-	out	(CF1623),a	; high byte of track is always 0
 	pop	af		; restore the sector value
 	out	(CF07),a	; write sector
-	pop	af		; restore the track value
-	out	(CF815),a
-;	ld	a,0		; LA sector 0
-;	out	(CF07),a	; 
+	pop	de		; restore the track value
+	ld	a,e
+	out	(CF815),a	; write low byte of track
+	ld	a,d
+	out	(CF1623),a	; write high byte of track
 	ld	a,20h		; read sector command
 	out	(CFstat),a	; issue the read sector command
 readdrq:
@@ -1428,7 +1430,7 @@ CIN:	call	CINQ		; get char
 ; Get char from console without echo
 
 CINQ:	in	a,(RxStat)	; read on-chip UART receive status
-	and	10h		;;Z data available?
+	and	10h		; Z data available?
 	jr	z,CINQ
 	in	a,(RxData)	; save to reg A
 	ret
@@ -1446,7 +1448,7 @@ COUT1:	in	a,(TxStat)	; transmit empty?
 ;PROGEND	equ $		; end of the program
 PROGEND	equ	0c000h		; end of the program is above the stack
 
-signon$:  db	CR,LF,"TinyZZ Monitor v2.0 12-Apr-2020",CR,LF,0
+signon$:  db	CR,LF,"TinyZZ Monitor v2.1 12-Mar-2021",CR,LF,0
 
 PROMPT$:  db	CR,LF,LF,">",0
 what$:	  db	CR,LF,"?",0

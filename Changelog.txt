@@ -3,8 +3,8 @@ Changelog
 
 27/07/18
 
-- COUTdone removed (not necessary to wait for character to be output
-  before switching I/O page).
+- COUTdone removed (not necessary to wait for character to be output before
+  switching I/O page).
 
 - Code optimizations, e.g.
     ex de,hl  instead of  ld l,e + ld h,d
@@ -38,4 +38,10 @@ Changelog
 
 - Boot UZI280 option (requires installing a suitable bootloader on block 0
   of the UZI partition).
+
+
+11/03/21
+
+- Allow 16-bit track number in R command.
+
 
