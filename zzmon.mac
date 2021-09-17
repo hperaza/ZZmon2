@@ -1,3 +1,12 @@
+; 9/17/21 v2.2 by Tony Nicholson
+;  - Detect a zero-length Intel HEX type 0 data record (emitted by various
+;    CP/M assemblers instead of a end-of-file type 1 record type). This
+;    prevents a stray zero-length record from incorrectly trying to process
+;    256 bytes of data.  Loading an Intel HEX input stream will now exit
+;    when it sees the :00xxxx01yy end-of-file type 1 record, or when an 'X'
+;    character is entered.
+;  - Optimise code-size by using relative jumps where possible
+;
 ; 3/11/21 v2.1 by H. Peraza
 ;  - allow 16-bit track number in R command.
 ;
@@ -184,7 +193,7 @@ CMDLP1:	call	CINQ
 	cp	CR		; carriage return gets a new prompt
 	ret	z
 	cp	':'		; Is this Intel load file?
-	jp	z,HEXLOAD
+	jr	z,HEXLOAD
 	call	UCASE		; convert to uppercase
 	call	COUT		; echo character
 	cp	'H'		; Help command
@@ -209,13 +218,12 @@ CMDLP1:	call	CINQ
 	jp	z,BOOT
 	cp	'X'		; Clear RAMdisk directory at 0x80000
 	jp	z,FORMAT
+
 what:	ld	hl,what$
-	call	STROUT
-	ret
+	jp	STROUT		; Print message and return
 
 abort:	ld	hl,abort$	; print command not executed
-	call	STROUT
-	ret
+	jp	STROUT		;  and return to get next command
 
 ; Initialize for Intel HEX file load operation
 
@@ -241,9 +249,9 @@ fileload:
 	ld	b,a		; checksum is kept in reg B
 	call	GETHEXQ		; get the record type, 0 is data, 1 is end
 	or	a
-	jp	z,filesave
+	jr	z,filesave
 	cp	1		; end of file transfer?
-	jp	z,fileend
+	jr	z,fileend
 	cp	4		; Extended linear address?
 	jp	nz,unknown	; if not, print a 'U'
 
@@ -270,7 +278,7 @@ fileload:
 	add	b		; compare to checksum accumulated in reg B
 	jp	nz,badload	; checksum does not match, put '?'
 	ld	a,'E'		; denote a successful Extended linear addr update
-	jp	filesav2
+	jr	filesav2
 
 fileend:
 	; end of the file load
@@ -288,6 +296,14 @@ filesave:
 	add	a,b		; accumulating checksum of record type
 	ld	b,a		; checksum is kept in reg B
 	ld	ix,0c000h	; 0c000h is buffer for incoming data
+	ld	a,d		; count is in reg D
+	or	a		; check for zero length
+	jr	nz,filesavx	; non-zero, get the bytes
+	call	GETHEXQ		; get the checksum
+	add	b		; add the cumulative checksum
+	jr	nz,badload	; result should be zero if ok
+	ld	a,'0'		; log we saw zero-length record
+	jr	filesav2	; and continue loading
 filesavx:
 	call	GETHEXQ		; get a byte
 	ld	(ix),a		; save to buffer
@@ -295,10 +311,10 @@ filesavx:
 	ld	b,a		; checksum is kept in reg B
 	inc	ix
 	dec	d
-	jp	nz,filesavx
+	jr	nz,filesavx
 	call	GETHEXQ		; get the checksum
 	add	b		; compare to checksum accumulated in reg B
-	jp	nz,badload	; checksum not match, put '?'
+	jr	nz,badload	; checksum not match, put '?'
 	call	DMAPage		; set page I/O reg to DMA
 
 	; use DMA to put data from buffer to location pointed by EHL
@@ -372,20 +388,28 @@ filesavx:
 	ld	a,'.'		; checksum match, put '.'
 filesav2:
 	call	COUT
-	jp	flushln		; repeat until record end
+	jr	flushln		; repeat until record end
 
 badload:
 	ld	a,'?'		; checksum not match, put '?'
-	jp	filesav2
+	jr	filesav2
 
 unknown:
 	ld	a,'U'		; put out a 'U' and wait for next record
 	call	COUT
 flushln:
 	call	CINQ		; keep on reading until ':' is encountered
+	cp	'X'		;  or an 'X' is typed to abort back
+	jr	z,loadabort	;  to the command prompt.
+	cp	'x'
+	jr	z,loadabort
 	cp	':'
-	jp	nz,flushln
+	jr	nz,flushln
 	jp	fileload
+
+loadabort:
+	ld	hl,ldabort$	; put out an abort message and
+	jp	STROUT		;  return to the command prompt
 
 ; format CF drives directories unless it is RAM disk
 
@@ -398,28 +422,28 @@ FORMAT:	ld	hl,clrdir$	; command message
 	call	STROUT
 	call	CIN
 	cp	'A'
-	jp	z,formatA	; fill track 1 sectors 0-0x1F with 0xE5
+	jr	z,formatA	; fill track 1 sectors 0-0x1F with 0xE5
 	cp	'B'
-	jp	z,formatB	; fill track 0x40 sectors 0-0x1F with 0xE5
+	jr	z,formatB	; fill track 0x40 sectors 0-0x1F with 0xE5
 	cp	'C'
-	jp	z,formatC	; fill track 0x80 sectors 0-0x1F with 0xE5
+	jr	z,formatC	; fill track 0x80 sectors 0-0x1F with 0xE5
 	cp	'D'
-	jp	z,formatD	; fill track 0xC0 sectors 0-0x1F with 0xE5
+	jr	z,formatD	; fill track 0xC0 sectors 0-0x1F with 0xE5
 	cp	'E'
-	jp	z,ClearDir
+	jr	z,ClearDir
 	jp	abort		; abort command if not in the list of options
 
 formatA:
 	ld	de,100h		; start with track 1 sector 0
-	jp	doformat
+	jr	doformat
 
 formatB:
 	ld	de,4000h	; start with track 0x40 sector 0
-	jp	doformat
+	jr	doformat
 
 formatC:
 	ld	de,8000h	; start with track 0x80 sector 0
-	jp	doformat
+	jr	doformat
 
 formatD:
 	ld	de,0c000h	; start with track 0xC0 sector 0
@@ -442,14 +466,14 @@ wrCFf:
 	out	(CFsectcnt),a	; write to sector count with 1
 	ld	a,e		; write CPM sector
 	cp	20h		; format sector 0-0x1F
-	jp	z,wrCFdonef	; done formatting
+	jr	z,wrCFdonef	; done formatting
 	out	(CF07),a	; 
 	ld	a,30h		; write sector command
 	out	(CFstat),a	; issue the write sector command
 wrdrqf:
 	in	a,(CFstat)	; check data request bit set before write CF data
 	and	8		; bit 3 is DRQ, wait for it to set
-	jp	z,wrdrqf
+	jr	z,wrdrqf
 	ld	b,0h		; sector has 256 16-bit data
 loopf:
 	outw	(c),hl
@@ -461,10 +485,10 @@ readbsyf:
 
 	in	a,(CFstat)	; read CF status 
 	and	80h		; mask off all except busy bit
-	jp	nz,readbsyf
+	jr	nz,readbsyf
 
 	inc	e		; write next sector
-	jp	wrCFf
+	jr	wrCFf
 wrCFdonef:
 	call	UARTPage	; set page I/O reg to internal UART
 	ret
@@ -516,16 +540,16 @@ clrDir:
 	inc	hl
 	ld	a,20h		; hl reaches 0x2000?
 	cp	a,h
-	jp	nz,clrDir
+	jr	nz,clrDir
 	pop	hl		; get the previous system page 1 descriptor value
 	dec	d		; decrement loop counter
-	jp	z,clrDir2
+	jr	z,clrDir2
 	ld	a,10h		; increment to next 4K page
 	add	a,l		; go thru 16 4K page from 0x080000 to 0x08F000
 	ld	l,a
 	push	hl		; save the new descriptor value for next iteration
 	outw	(c),hl		; write system page 1	
-	jp	clrDir1
+	jr	clrDir1
 clrDir2:
 	ld	c,MMUctrl	; point to MMU master control reg
 	ld	hl,33ffh	; turn off MMU, 
@@ -540,8 +564,7 @@ clrDir2:
 ; print help message
 
 HELP:	ld	hl,HELP$	; print help message
-	call	STROUT
-	ret
+	jp	STROUT		;  and return
 
 ; Boot OS
 
@@ -553,7 +576,7 @@ BOOT:	ld	hl,bootcpm$	; print command message
 	cp	'2'		; '2' is CP/M 2.2
 	jp	z,boot22
 	cp	'3'		; '3' is CP/M 3
-	jp	z,boot3
+	jr	z,boot3
 	cp	'4'		; '4' is RSX280
 	jp	z,bootrsx
 	cp	'5'		; '5' is UZI280
@@ -582,18 +605,18 @@ readCPM3:
 	out	(CFsectcnt),a	; write to sector count with 1
 	ld	a,d		; read CPM sector
 	cp	10h		; between LA1 and LA15
-	jp	z,goCPM3	; done copying, execute CPM
+	jr	z,goCPM3	; done copying, execute CPM
 	out	(CF07),a	; 
 	ld	a,20h		; read sector command
 	out	(CFstat),a	; issue the read sector command
 readdrq3:
 	in	a,(CFstat)	; check data request bit set before read CF data
 	and	8		; bit 3 is DRQ, wait for it to set
-	jp	z,readdrq3
+	jr	z,readdrq3
 	ld	b,0h		; sector has 256 16-bit data
 	inirw
 	inc	d		; read next sector
-	jp	readCPM3
+	jr	readCPM3
 goCPM3:
 	call	UARTPage	; set page I/O reg to internal UART
 	jp	01100h		; BIOS starting address of CP/M
@@ -622,18 +645,18 @@ readCPM1:
 	ld	a,d		; read CPM sector
 ;	cp	27		; between LA9 and LA26
 	cp	92h		; between LA80h and LA91h
-	jp	z,goCPM		; done copying, execute CPM
+	jr	z,goCPM		; done copying, execute CPM
 	out	(CF07),a	; 
 	ld	a,20h		; read sector command
 	out	(CFstat),a	; issue the read sector command
 readdrqCPM:
 	in	a,(CFstat)	; check data request bit set before read CF data
 	and	8		; bit 3 is DRQ, wait for it to set
-	jp	z,readdrqCPM
+	jr	z,readdrqCPM
 	ld	b,0h		; sector has 256 16-bit data
 	inirw
 	inc	d		; read next sector
-	jp	readCPM1
+	jr	readCPM1
 goCPM:
 	call	UARTPage	; set page I/O reg to internal UART
 	jp	0F200h		; BIOS starting address of CP/M
@@ -669,7 +692,7 @@ bootld:	ld	hl,confirm$	; CRLF to execute the command
 	out	(CFstat),a	; issue the read sector command
 wtdrq:	in	a,(CFstat)	; check data request bit set before read CF data
 	and	8		; bit 3 is DRQ, wait for it to set
-	jp	z,wtdrq
+	jr	z,wtdrq
 	ld	b,0		; one block is 256 words
 	inirw
 	call	UARTPage	; set page I/O reg to internal UART
@@ -712,18 +735,18 @@ readApp1:
 	out	(CFsectcnt),a	; write to sector count with 1
 	ld	a,d		; read CPM sector
 	cp	80h		; between LA40h and LA7fh
-	jp	z,goApps	; done copying, execute user apps
+	jr	z,goApps	; done copying, execute user apps
 	out	(CF07),a	; 
 	ld	a,20h		; read sector command
 	out	(CFstat),a	; issue the read sector command
 readdrqApp:
 	in	a,(CFstat)	; check data request bit set before read CF data
 	and	8		; bit 3 is DRQ, wait for it to set
-	jp	z,readdrqApp
+	jr	z,readdrqApp
 	ld	b,0h		; sector has 256 16-bit data
 	inirw
 	inc	d		; read next sector
-	jp	readApp1
+	jr	readApp1
 goApps:
 	call	UARTPage	; set page I/O reg to internal UART
 	jp	0h		; User apps starts at 0x0
@@ -865,7 +888,7 @@ tstCRLF:
 	cp	CR		; if carriage return, output LF
 	jp	z,tstCRLF1
 	cp	LF		; if line feed, output CR 
-	jp	z,tstCRLF2
+	jr	z,tstCRLF2
 	ret
 tstCRLF1:
 	ld	a,LF		; put out a LF
@@ -886,12 +909,12 @@ CopyCPM2:
 ;	ret	nz		; abort command if not CR or LF
 	ld	hl,0DC00h	; CPM starts from 0xDC00 to 0xFFFF
 	ld	de,8092h	; reg DE contains beginning sector and end sector values
-	jp	wrCF
+	jr	wrCF
 
 CopyCPM3:
 	ld	hl,1100h	; CPMLDR starts from 0x1100
 	ld	de,0110h	; reg DE contains beginning sector and end sector values
-	jp	wrCF
+	jr	wrCF
 
 cpboot:
 ;	call	tstCRLF
@@ -921,7 +944,7 @@ cpboot:
 ;;	ld	(hl),0
 	ld	hl,0B400h	; ZZMon starts from 0xB400 to 0xBFFF
 	ld	de,0F8FEh	; last 8 sectors of track 0 reserved for ZZMon.  
-	jp	wrCF1		; CF is already initialized in wrCFb routine, jump directly
+	jr	wrCF1		; CF is already initialized in wrCFb routine, jump directly
 
 	; to sector copy routine
 
@@ -1189,7 +1212,7 @@ DM2:	ld	a,(hl)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 DMPLOC:	ld	a,(hl)
-	jp	HEXOUT
+	jr	HEXOUT
 
 ASCLOC:	cp	7Fh
 	jr	nc,AL1
@@ -1448,12 +1471,13 @@ COUT1:	in	a,(TxStat)	; transmit empty?
 ;PROGEND	equ $		; end of the program
 PROGEND	equ	0c000h		; end of the program is above the stack
 
-signon$:  db	CR,LF,"TinyZZ Monitor v2.1 12-Mar-2021",CR,LF,0
+signon$:  db	CR,LF,"TinyZZ Monitor for Z280RC v2.2 17-Sep-2021",CR,LF,0
 
 PROMPT$:  db	CR,LF,LF,">",0
 what$:	  db	CR,LF,"?",0
 confirm$: db	" Press Return to confirm: ",0
 abort$:	  db	CR,LF,"Command aborted",0
+ldabort$: db	CR,LF,"Intel HEX load aborted",0
 
 track$:	  db	" track: 0x",0
 sector$:  db	" sector: 0x",0
@@ -1618,6 +1642,7 @@ HELP$:	  db	"elp",CR,LF
 	jp	0c000h		; start CFMon execution at 0xC000
 
 	END
+
 ; This is the CFMon program that'll be created in 0xC000 by the CFMonLdr
                              A       23 	org	0C000h
 0000C000 3E 40               A       25 	ld	a,40h		; LA addressing mode
@@ -1648,4 +1673,3 @@ HELP$:	  db	"elp",CR,LF
 0000C02D DB CF               A       55 	in	a,(CFstat)	; OUTJMP bug fix
 0000C02F 14                  A       56 	inc	d
 0000C030 C3 0B C0            A       57 	jp	moresect
-	
