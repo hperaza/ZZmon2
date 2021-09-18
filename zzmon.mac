@@ -1,3 +1,8 @@
+; 9/18/21 v2.3 by Tony Nicholson
+;  - CompactFlash disk formatting of drives A:, B:, C: and D: for CP/M
+;    using the XA, XB, XC and XD commands now clears 80h sectors in case
+;    a larger number of directory entries is being used.
+;
 ; 9/17/21 v2.2 by Tony Nicholson
 ;  - Detect a zero-length Intel HEX type 0 data record (emitted by various
 ;    CP/M assemblers instead of a end-of-file type 1 record type). This
@@ -413,22 +418,22 @@ loadabort:
 
 ; format CF drives directories unless it is RAM disk
 
-; drive A directory is track 1, sectors 0-0x1F
-; drive B directory is track 0x40, sectors 0-0x1F
-; drive C directory is track 0x80, sectors 0-0x1F
-; drive D directory is track 0xC0, sectors 0-0x1F
+; drive A directory is track 1, sectors 0-0x7F (2048 directory entries)
+; drive B directory is track 0x40, sectors 0-0x7F  "     "        "
+; drive C directory is track 0x80, sectors 0-0x7F  "     "        "
+; drive D directory is track 0xC0, sectors 0-0x7F  "     "        "
 
 FORMAT:	ld	hl,clrdir$	; command message
 	call	STROUT
 	call	CIN
 	cp	'A'
-	jr	z,formatA	; fill track 1 sectors 0-0x1F with 0xE5
+	jr	z,formatA	; fill track 1 sectors 0-0x7F with 0xE5
 	cp	'B'
-	jr	z,formatB	; fill track 0x40 sectors 0-0x1F with 0xE5
+	jr	z,formatB	; fill track 0x40 sectors 0-0x7F with 0xE5
 	cp	'C'
-	jr	z,formatC	; fill track 0x80 sectors 0-0x1F with 0xE5
+	jr	z,formatC	; fill track 0x80 sectors 0-0x7F with 0xE5
 	cp	'D'
-	jr	z,formatD	; fill track 0xC0 sectors 0-0x1F with 0xE5
+	jr	z,formatD	; fill track 0xC0 sectors 0-0x7F with 0xE5
 	cp	'E'
 	jr	z,ClearDir
 	jp	abort		; abort command if not in the list of options
@@ -465,7 +470,7 @@ wrCFf:
 	ld	a,1		; write 1 sector
 	out	(CFsectcnt),a	; write to sector count with 1
 	ld	a,e		; write CPM sector
-	cp	20h		; format sector 0-0x1F
+	cp	80h		; format sector 0-0x7F
 	jr	z,wrCFdonef	; done formatting
 	out	(CF07),a	; 
 	ld	a,30h		; write sector command
@@ -1471,7 +1476,7 @@ COUT1:	in	a,(TxStat)	; transmit empty?
 ;PROGEND	equ $		; end of the program
 PROGEND	equ	0c000h		; end of the program is above the stack
 
-signon$:  db	CR,LF,"TinyZZ Monitor for Z280RC v2.2 17-Sep-2021",CR,LF,0
+signon$:  db	CR,LF,"TinyZZ Monitor for Z280RC v2.3 18-Sep-2021",CR,LF,0
 
 PROMPT$:  db	CR,LF,LF,">",0
 what$:	  db	CR,LF,"?",0
@@ -1673,3 +1678,4 @@ HELP$:	  db	"elp",CR,LF
 0000C02D DB CF               A       55 	in	a,(CFstat)	; OUTJMP bug fix
 0000C02F 14                  A       56 	inc	d
 0000C030 C3 0B C0            A       57 	jp	moresect
+	
