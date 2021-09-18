@@ -45,3 +45,21 @@ Changelog
 - Allow 16-bit track number in R command.
 
 
+09/17/21 v2.2 by Tony Nicholson
+
+- Detect a zero-length Intel HEX type 0 data record (emitted by various CP/M
+  assemblers instead of a end-of-file type 1 record type). This prevents a
+  stray zero-length record from incorrectly trying to process 256 bytes of
+  data. Loading an Intel HEX input stream will now exit when it sees the
+  :00xxxx01yy end-of-file type 1 record, or when an 'X' character is entered.
+
+- Optimise code-size by using relative jumps where possible
+
+
+09/18/21 v2.3 by Tony Nicholson
+
+- CompactFlash disk formatting of drives A:, B:, C: and D: for CP/M using
+  the XA, XB, XC and XD commands now clears 80h sectors in case a larger
+  number of directory entries is being used.
+
+
